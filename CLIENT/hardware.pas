@@ -1,0 +1,284 @@
+unit hardware;
+
+interface
+uses   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, ExtCtrls, Menus,  ComCtrls, StdCtrls, Buttons, ToolWin,
+  MPlayer, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient,IniFiles,
+  Sockets,Winsock,ScktComp,shellapi, ImgList;
+type TMyIniFile=record    //INI. FILE STRUCT
+    Server1IP:string;
+    Server2IP:string;
+    Server3IP:string;
+    Server1Port:string;
+    Server2Port:string;
+    Server3Port:string;
+    MON:boolean;
+    TUS:boolean;
+    WED:boolean;
+    THU:boolean;
+    FRI:boolean;
+    SAR:boolean;
+    SUN:boolean;
+    TIME:integer;
+    Refresh:integer;
+    SoundCPU:string;
+    SoundMEM:string;
+    SoundNETWORK:string;
+end;
+type
+    TMEMORYSTATUS=   PACKED   record
+    dwLength:DWORD;
+    dwMemoryLoad:INTEGER;
+    ullTotalPhys:DWORD;
+    ullAvailPhys:DWORD;
+    ullTotalPageFile:DWORD;
+    ullAvailPageFile:DWORD;
+    ullTotalVirtual:DWORD;
+    ullAvailVirtual:DWORD;
+end;
+    LPMEMORYSTATUSEX=^TMEMORYSTATUS; //ず獺挡篶砰皐跑秖
+type                        //MEM INFO STRUCT
+    MEMORY=packed   record
+    MUsage:Double;
+    VMUsage:Double;
+    MEMTotalPhys:String;
+    MEMAvailPhys:String;
+end;
+type                  //CPU INFO STRUCT
+    CPU=packed   record
+    CUsage:Double;
+    CNumber:byte;
+end;
+TYPE
+  HDINFO=record
+    Usage:double;
+    lpFreeClusters:INT64;
+    lpTotalClusters:INT64;
+  end;
+var HDINFO1:HDINFO;
+VAR  liOldIdleTime:  LARGE_INTEGER ;
+VAR  liOldSystemTime:   LARGE_INTEGER;
+type
+    TPDWord   =   ^DWORD;
+    TSystem_Basic_Information   =   packed   record
+        dwUnknown1:   DWORD;
+        uKeMaximumIncrement:   ULONG;
+        uPageSize:   ULONG;
+        uMmNumberOfPhysicalPages:   ULONG;
+        uMmLowestPhysicalPage:   ULONG;
+        uMmHighestPhysicalPage:   ULONG;
+        uAllocationGranularity:   ULONG;
+        pLowestUserAddress:   Pointer;
+        pMmHighestUserAddress:   Pointer;
+        uKeActiveProcessors:   ULONG;
+        bKeNumberProcessors:   byte;
+        bUnknown2:   byte;
+        wUnknown3:   word;
+end;
+type
+    TSystem_Performance_Information   =   packed   record
+        liIdleTime:   LARGE_INTEGER;   {LARGE_INTEGER}
+        dwSpare:   array[0..75]   of   DWORD;
+end;
+
+type
+    TSystem_Time_Information   =  PACKED    record
+        liKeBootTime:   LARGE_INTEGER;
+        liKeSystemTime:   LARGE_INTEGER;
+        liExpTimeZoneBias:   LARGE_INTEGER;
+        uCurrentTimeZoneId:   ULONG;
+        dwReserved:   DWORD;
+end;
+var MyIniFile:TMyIniFile;
+    CPUhandle:CPU;            //CPU獺挡篶砰
+    MEMhandle:MEMORY;         //ず獺挡篶砰
+
+    dev_ThreadCritical: _RTL_CRITICAL_SECTION;
+function IniFile:boolean;
+function GetIP(): Tstrings;
+procedure GetMEMUsage;
+procedure NEW_GetCPUUsage;
+procedure GETHDUsage;
+function GlobalMemoryStatus(pmst:LPMEMORYSTATUSEX ):BOOLEAN;stdcall ;external 'kernel32.dll';
+function FormatSpace(space:INT64):string;    //砏絛计
+function NtQuerySystemInformation(infoClass:DWORD;buffer:Pointer;bufSize:DWORD;
+              returnSize:TPDword):DWORD;stdcall ;external 'ntdll.dll';
+implementation
+uses Unit1;
+function IniFile:boolean;
+var inifile:Tinifile;
+begin
+   inifile:=Tinifile.Create(ExtractFilePath(Application.ExeName)+'C_CONFIG.INI');
+   IF inifile.FileName='' THEN BEGIN
+      SHOWMESSAGE('打开C_CONFIG.INI文件失败,程式将退出');
+      result:=false;
+   END;
+   try
+       MyIniFile.Server1IP:=inifile.Readstring('ServerList','Server1IP','');
+       MyIniFile.Server2IP:=inifile.Readstring('ServerList','Server2IP','');
+       MyIniFile.Server3IP:=inifile.Readstring('ServerList','Server3IP','');
+       MyIniFile.Server1Port:=inifile.Readstring('ServerList','Server1Port','0');
+       MyIniFile.Server2Port:=inifile.Readstring('ServerList','Server2Port','0');
+       MyIniFile.Server3Port:=inifile.Readstring('ServerList','Server3Port','0');
+       MyIniFile.MON:=inifile.Readbool('Time','MON',False);
+       MyIniFile.TUS:=inifile.Readbool('Time','TUS',False);
+       MyIniFile.WED:=inifile.Readbool('Time','WED',False);
+       MyIniFile.THU:=inifile.Readbool('Time','THU',False);
+       MyIniFile.FRI:=inifile.Readbool('Time','FRI',False);
+       MyIniFile.SAR:=inifile.Readbool('Time','SAR',False);
+       MyIniFile.SUN:=inifile.Readbool('Time','SUN',False);
+       MyIniFile.TIME:=inifile.Readinteger('Time','TIME',0);
+       MyIniFile.Refresh:=inifile.Readinteger('Time','Refresh',0);
+       MyIniFile.SoundCPU:=inifile.Readstring('Sound','CPU','');
+       MyIniFile.SoundMEM:=inifile.Readstring('Sound','MEM','');
+       MyIniFile.SoundNETWORK:=inifile.Readstring('Sound','NETWORK','');
+   except
+       SHOWMESSAGE('读取CONFIG.INI文件失败,程式将退出');
+       result:=false;
+   end;
+       inifile.Free;
+end;
+function GetIP(): Tstrings;
+type
+    TaPInAddr = array[0..10] of PInAddr;
+    PaPInAddr = ^TaPInAddr;
+var
+    phe : PHostEnt;
+    pptr : PaPInAddr;
+    Buffer : array[0..MAX_PATH-1] of char;
+    i : integer;
+    GInitData : TWSADATA;
+    sHostName: String;
+begin
+    WSAStartup($101, GInitData);
+    Result := TStringList.Create;
+    Result.Clear;
+    if sHostName = '' then //若为空值, 则取本机的hostname
+    begin
+        GetHostName(Buffer, sizeof(Buffer));
+        sHostName := String(Buffer);
+    end;
+    phe := GetHostByName(PChar(sHostName));
+    if phe = nil then Exit;
+    pptr := PaPInAddr(phe^.h_addr_list);
+    i := 0;
+    while pptr^[i] <> nil do
+    begin
+        Result.Add(StrPas(inet_ntoa(pptr^[i]^)));
+        Inc(i);
+    end;
+    WSACleanup;
+end;
+function FormatSpace(space:INT64):string;    //砏絛计
+begin
+    IF trunc(space/1024/1024)<1000 THEN
+      result:=IntToStr(trunc(space/1024/1024))+'MB'
+    ELSE
+      result:=FORMATFLOAT('0.00',space/1024/1024/1024)+'GB';
+end;
+procedure GetMEMUsage;
+var MEMORYSTATUS1:TMEMORYSTATUS;
+BEGIN
+      GlobalMemoryStatus(@MEMORYSTATUS1);
+      EnterCriticalSection(dev_ThreadCritical);
+      MEMhandle.MUsage:=(MEMORYSTATUS1.ullTotalPhys-MEMORYSTATUS1.ullAvailPhys)/MEMORYSTATUS1.ullTotalPhys;
+      MEMhandle.VMUsage:=(MEMORYSTATUS1.ullTotalVirtual-MEMORYSTATUS1.ullAvailVirtual)/MEMORYSTATUS1.ullTotalVirtual;
+      //Form1.Label13.Caption:='MEMTotalPhys:'+
+      MEMhandle.MEMTotalPhys:=FormatSpace(MEMORYSTATUS1.ullTotalPhys);
+      //Form1.Label14.Caption:='MEMAvailPhys:'+
+      MEMhandle.MEMAvailPhys:=FormatSpace(MEMORYSTATUS1.ullAvailPhys);
+      LeaveCriticalSection(dev_ThreadCritical);
+END;
+function Li2Double(x:LARGE_INTEGER):Double;
+begin
+    Result   :=   x.HighPart   *   4.294967296E9   +   x.LowPart
+end;
+
+procedure GETHDUsage;
+var  drivers:DWORD;
+     i:DWORD;
+     ch:char;
+     FreeAvailable:INT64	;
+     TotalSpace:INT64	;
+     TotalFree:PLargeInteger;
+     lpFreeSpace:INT64;
+     lpTotalSpace:INT64;
+     bLoopAborted:BOOLEAN;
+begin
+       FreeAvailable:=0;
+       TotalSpace:=0;
+       lpFreeSpace:=0;
+       lpTotalSpace:=0;  //INIT ALL ARGUSTMENT
+       Form1.Label8.Caption:='';
+       TotalFree:=nil;
+       drivers:=GetLogicalDrives();            //GetDiskFreeSpaceEx癸 GetDiskFreeSpace璸衡絋
+        for   i:=0   to   25   do
+        begin
+            ch:=chr(ord('A')+i);
+            IF LongBool(drivers and ($0001 shl i)) = True then //簿喷靡癸莱絃才琌
+              if GetDriveType(PAnsiChar(ch+':\'))=DRIVE_FIXED THEN
+
+              begin
+                 GetDiskFreeSpaceEx(PAnsiChar(ch+':\'),FreeAvailable,TotalSpace,TotalFree);
+             //    Form1.Label8.Caption:=Form1.Label8.Caption+' '+ch+':\'+'                 '+FormatSpace(FreeAvailable)+'                 '+FormatSpace(TotalSpace)+'             '+FORMATFLOAT('0.00%',(1-FreeAvailable/TotalSpace)*100)+#13#10;
+                 lpFreeSpace:=lpFreeSpace+FreeAvailable;
+                 lpTotalSpace:=lpTotalSpace+TotalSpace;
+              END;
+        end;
+        EnterCriticalSection(dev_ThreadCritical);
+        HDINFO1.Usage:=(lpTotalSpace-lpFreeSpace)/lpTotalSpace;
+        HDINFO1.lpFreeClusters:=trunc(lpFreeSpace/1024/1024);
+        HDINFO1.lpTotalClusters:=trunc(lpTotalSpace/1024/1024);
+        LeaveCriticalSection(dev_ThreadCritical);
+       { Sleep(3000);
+      END;  }
+end;
+procedure NEW_GetCPUUsage;
+var
+    SysBaseInfo:   TSystem_Basic_Information;
+    SysPerfInfo:   TSystem_Performance_Information;
+    SysTimeInfo:   TSystem_Time_Information;
+    status:   Longint;   {long}
+    dbSystemTime:   Double;
+    dbIdleTime:   Double;
+    bLoopAborted   :   boolean;
+    I: INTEGER;
+begin
+    //   get   number   of   processors   in   the   system
+    status   :=   NtQuerySystemInformation(SystemBasicInformation,   @SysBaseInfo,   SizeOf(SysBaseInfo),   nil);
+    if   status   <>   0   then   Exit;
+//    while NOT CPUTerminated DO BEGIN
+        while CPUPaused DO sleep(1000);
+            //   get   new   system   time
+        status   :=   NtQuerySystemInformation(SystemTimeInformation,   @SysTimeInfo,   SizeOf(SysTimeInfo),   NIL);
+        if   status   <>   0   then  Exit;
+                //   get   new   CPU 's   idle   time
+        status   :=   NtQuerySystemInformation(SystemPerformanceInformation,   @SysPerfInfo,   SizeOf(SysPerfInfo),   nil);
+        if   status   <>   0   then  Exit;
+                //   if   it 's   a   first   call   -   skip   it
+        if   (liOldIdleTime.QuadPart   <>   0)   then
+        begin
+                   //   CurrentValue   =   NewValue   -   OldValue
+            dbIdleTime   :=   Li2Double(SysPerfInfo.liIdleTime)   -   Li2Double(liOldIdleTime);
+            dbSystemTime   :=   Li2Double(SysTimeInfo.liKeSystemTime)   -   Li2Double(liOldSystemTime);
+                     //   CurrentCpuIdle   =   IdleTime   /   SystemTime
+            dbIdleTime   :=   dbIdleTime   /   dbSystemTime;
+                    //   CurrentCpuUsage%   =   100   -   (CurrentCpuIdle   *   100)   /   NumberOfProcessors
+            dbIdleTime   :=   100.0   -   dbIdleTime   *   100.0   /   SysBaseInfo.bKeNumberProcessors   +   0.5;
+                    //   Show   Percentage
+            EnterCriticalSection(dev_ThreadCritical);
+            CPUhandle.CUsage:=dbIdleTime;
+            CPUhandle.CNumber:=SysBaseInfo.bKeNumberProcessors;
+            LeaveCriticalSection(dev_ThreadCritical);
+            Application.ProcessMessages;
+                   //   Abort   if   user   pressed   ESC   or   Application   is   terminated
+            bLoopAborted   :=   (GetKeyState(VK_ESCAPE)   and   128   =   128)   or   Application.Terminated;
+        end;
+        //   store   new   CPU 's   idle   and   system   time
+        liOldIdleTime   :=   SysPerfInfo.liIdleTime;
+        liOldSystemTime   :=   SysTimeInfo.liKeSystemTime;
+        //   wait   one   second
+ //   end;
+END;
+
+end.

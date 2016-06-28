@@ -1,0 +1,96 @@
+object FrmSound: TFrmSound
+  Left = 434
+  Top = 216
+  Width = 320
+  Height = 317
+  Caption = 'Alert Sound Config'
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'MS Sans Serif'
+  Font.Style = []
+  OldCreateOrder = False
+  OnShow = FormShow
+  PixelsPerInch = 96
+  TextHeight = 13
+  object ListBox1: TListBox
+    Left = 192
+    Top = 16
+    Width = 89
+    Height = 217
+    ItemHeight = 13
+    TabOrder = 0
+  end
+  object Button1: TButton
+    Left = 120
+    Top = 40
+    Width = 58
+    Height = 33
+    Caption = '->'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -24
+    Font.Name = 'MS Sans Serif'
+    Font.Style = []
+    ParentFont = False
+    TabOrder = 1
+    OnClick = Button1Click
+  end
+  object Button2: TButton
+    Left = 120
+    Top = 88
+    Width = 58
+    Height = 33
+    Caption = '<-'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -24
+    Font.Name = 'MS Sans Serif'
+    Font.Style = []
+    ParentFont = False
+    TabOrder = 2
+    OnClick = Button2Click
+  end
+  object Button3: TButton
+    Left = 120
+    Top = 136
+    Width = 58
+    Height = 33
+    Caption = 'Clear'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'MS Sans Serif'
+    Font.Style = []
+    ParentFont = False
+    TabOrder = 3
+    OnClick = Button3Click
+  end
+  object ListBox2: TListBox
+    Left = 8
+    Top = 16
+    Width = 97
+    Height = 217
+    ItemHeight = 13
+    Items.Strings = (
+      #38271
+      #30701)
+    TabOrder = 4
+  end
+  object Button4: TButton
+    Left = 120
+    Top = 248
+    Width = 58
+    Height = 33
+    Caption = 'Save'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'MS Sans Serif'
+    Font.Style = []
+    ParentFont = False
+    TabOrder = 5
+    OnClick = Button4Click
+  end
+end
